@@ -1,7 +1,7 @@
 {
-	"id": "obsidian-custom-plugin-starter",
-	"name": "Custom Plugin Starter",
-	"version": "0.0.1",
+	"id": "new-list",
+	"name": "New list",
+	"version": "0.0.2",
 	"minAppVersion": "0.15.0",
 	"description": "This is a sample plugin for Obsidian. This plugin demonstrates some of the capabilities of the Obsidian API.",
 	"author": "Boninall",
