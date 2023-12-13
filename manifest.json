@@ -1,6 +1,6 @@
 {
-	"id": "new-line-order-list",
-	"name": "New line order list",
+	"id": "better-order-list",
+	"name": "Better Order list",
 	"version": "0.0.2",
 	"minAppVersion": "0.15.0",
 	"description": "Support new line order list like 1、 or (1)., etc.",

@@ -1,4 +1,4 @@
-# Obsidian New Line Order List
+# Obsidian Better Order List
 
 - Support order list like this:
 
