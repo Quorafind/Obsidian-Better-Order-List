@@ -1,9 +1,9 @@
 {
-	"id": "new-list",
-	"name": "New list",
+	"id": "new-line-order-list",
+	"name": "New line order list",
 	"version": "0.0.2",
 	"minAppVersion": "0.15.0",
-	"description": "This is a sample plugin for Obsidian. This plugin demonstrates some of the capabilities of the Obsidian API.",
+	"description": "Support new line order list like 1、 or (1)., etc.",
 	"author": "Boninall",
 	"authorUrl": "https://github.com/Quorafind",
 	"fundingUrl": {
