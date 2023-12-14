@@ -131,6 +131,105 @@ function calculateNewCursorPosition(forEnterChanges: ChangeSpec[], state: Editor
     return lastChangeEnd;
 }
 
+
+/**
+ * 从行文本中提取括号和无括号的文本部分。
+ * @param lineText 行文本。
+ * @returns 返回括号和无括号的文本部分。
+ */
+function extractBracketsAndText(lineText: string): [string, string, string] {
+    const reg = /^([\(\[\【\（])?([^\）\]\】\)]*)([\）\]\】\)])?([\.、](.*))/;
+    const match = new RegExp(reg, 'gm').exec(lineText);
+
+    if (match) {
+        return [match[1] || '', (match[2] || '') + (match[4] || ''), (match[3] || '') ];
+    } else {
+        return ['', lineText, ''];
+    }
+}
+
+/**
+ * 处理删除操作，特别是涉及到序号的删除。
+ * @param transaction 当前事务。
+ * @param state 编辑器状态。
+ * @returns 更新后的状态。
+ */
+function handleDelete(transaction: Transaction, state: EditorState) {
+    const changes: ChangeSpec[] = [];
+    transaction.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+        const deletedText = transaction.startState.doc.sliceString(fromA, toA);
+        const currentLineText = state.doc.lineAt(fromA).text;
+        const nextLine = state.doc.lineAt(toB + 1);
+
+        if (deletedText.includes('\n') || currentLineText.trim() === '') {
+            // 检测下一行是否有序号
+            const [_, textWithoutBracketsNext, __] = extractBracketsAndText(nextLine.text);
+
+            const patternTypeNextLine = identifyPattern(textWithoutBracketsNext);
+
+
+            if (patternTypeNextLine) {
+                // 检测删除行的上一行是否有序号，并去除括号
+                const prevLine = state.doc.lineAt(fromA - 1);
+                const [bracketLeftPrev, textWithoutBracketsPrev, bracketRightPrev] = extractBracketsAndText(prevLine.text);
+                const patternTypePrevLine = identifyPattern(textWithoutBracketsPrev || '');
+
+                let lineNumber = nextLine.number;
+                let currentNumber = patternTypePrevLine && deletedText.includes('\n') ? extractNumber(textWithoutBracketsPrev, patternTypePrevLine) : 0;
+
+                while (lineNumber <= state.doc.lines) {
+                    const line = state.doc.line(lineNumber);
+                    const [bracketLeft, textWithoutBrackets, bracketRight] = extractBracketsAndText(line.text);
+                    const linePatternType = identifyPattern(textWithoutBrackets);
+
+                    if(linePatternType === null) break;
+
+                    if (linePatternType) {
+                        const targetNumberText = currentNumber.toString();
+                        const currentNumberText = extractNumber(textWithoutBrackets, linePatternType).toString();
+                        console.log(textWithoutBrackets, currentNumberText, currentNumber);
+                        const newNumberText = getNextNumber(targetNumberText, '', linePatternType);
+                        if (newNumberText) {
+                            const updatedText = `${bracketLeft}${newNumberText}${bracketRight}${textWithoutBrackets.slice(currentNumberText.length)}`;
+                            changes.push({from: line.from, to: line.to, insert: updatedText});
+                        }
+                        currentNumber++;
+                    }
+                    lineNumber++;
+                }
+            }
+        }
+    });
+
+    return changes;
+}
+
+/**
+ * 从行文本中提取序号。
+ * @param lineText 行文本。
+ * @param patternType 模式类型。
+ * @returns 提取的序号。
+ */
+function extractNumber(lineText: string, patternType: PatternType): number {
+    const match = lineText.match(/^[\w\u4e00-\u9fa5]+/);
+    if (match) {
+        switch (patternType) {
+            case "arabic":
+                return parseInt(match[0]);
+            case "uppercaseLetter":
+            case "lowercaseLetter":
+                return match[0].charCodeAt(0);
+            case "romanNumeral":
+                return romanToArabic(match[0]);
+            case "chineseNumeral":
+                return chineseToArabic(match[0]);
+            default:
+                return 1;
+        }
+    }
+    return 1;
+}
+
 /**
  * 检测并处理回车字符。
  * @param transaction 当前事务。
@@ -209,7 +308,28 @@ export const enterPressPlugin = () => {
                 )
                     return;
 
+
                 if (update.docChanged) {
+                    if(update.transactions.some(tr => tr.annotation(Transaction.userEvent)?.contains("delete"))) {
+                        console.log('delete', update.transactions);
+
+                        update.transactions.forEach((tr) => {
+                            if (tr.docChanged) {
+                                const forDeleteChanges: ChangeSpec[] = handleDelete(update.transactions[0], update.view.state);
+                                if(forDeleteChanges.length === 0) return;
+
+                                setTimeout(()=>{
+                                    const tr = update.view.state.update({
+                                        changes: ChangeSet.of(forDeleteChanges, update.view.state.doc.length),
+                                    });
+                                    update.view.dispatch(tr);
+                                });
+                            }
+                        })
+
+                        return;
+                    }
+
                     update.transactions.forEach((tr) => {
                         if (tr.docChanged) {
                             const forEnterChanges: ChangeSpec[] = checkForEnter(tr, update.view.state);

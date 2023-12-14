@@ -1,6 +1,6 @@
 {
 	"name": "better-order-list",
-	"version": "0.0.2",
+	"version": "1.0.0",
 	"description": "Support new line order list like 1、 or (1)., etc.",
 	"main": "main.js",
 	"scripts": {
