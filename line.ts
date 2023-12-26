@@ -206,6 +206,43 @@ function handleDelete(transaction: Transaction, state: EditorState) {
 }
 
 /**
+* 更新序号。
+ * @param startLine 起始行。
+ * @param state 编辑器状态。
+ * @param currentNumber 当前序号。
+ * @param patternType 模式类型。
+ * @param hasBrackets 是否有括号。
+*/
+function updateLineNumbers(startLine: number, state: EditorState, currentNumber: number, patternType: PatternType, hasBrackets: boolean): ChangeSpec[] {
+    const changes: ChangeSpec[] = [];
+    let lineNumber = startLine;
+
+    while (lineNumber <= state.doc.lines) {
+        const line = state.doc.line(lineNumber);
+        const [bracketLeft, textWithoutBrackets, bracketRight] = extractBracketsAndText(line.text);
+        const linePatternType = identifyPattern(textWithoutBrackets);
+
+        if((hasBrackets && bracketLeft === '') || (!hasBrackets && bracketLeft !== '')) break;
+
+        if (linePatternType === null) break;
+
+        if (linePatternType === patternType) {
+            const targetNumberText = currentNumber.toString();
+            const currentNumberText = extractNumber(textWithoutBrackets, linePatternType).toString();
+            const newNumberText = getNextNumber(targetNumberText, '', linePatternType);
+            if (newNumberText) {
+                const updatedText = `${bracketLeft}${newNumberText}${bracketRight}${textWithoutBrackets.slice(currentNumberText.length)}`;
+                changes.push({from: line.from, to: line.to, insert: updatedText});
+            }
+            currentNumber++;
+        }
+        lineNumber++;
+    }
+
+    return changes;
+}
+
+/**
  * 从行文本中提取序号。
  * @param lineText 行文本。
  * @param patternType 模式类型。
@@ -239,6 +276,7 @@ function extractNumber(lineText: string, patternType: PatternType): number {
  */
 function checkForEnter(transaction: Transaction, state: EditorState) {
     const changes: ChangeSpec[] = [];
+    let firstChanges: ChangeSpec[] = [];
     transaction.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
         let text = inserted.toString();
         if (text.includes('\n')) { // 检测到回车
@@ -253,6 +291,13 @@ function checkForEnter(transaction: Transaction, state: EditorState) {
             if(currentLineText.trim() === '') return; // 如果当前行为空行，不进行处理
             const reg = /^([\(\[\【\（])?([^\）\]\】\)]*)([\）\]\】\)])?([\.、](.*))/;
 
+            let bracketPattern = new RegExp(reg, 'gm'); // 检测成对括号
+            const bracketMatch = bracketPattern.exec(currentLineText);
+            const hasBrackets = bracketMatch !== null && bracketMatch[3] != undefined;
+            const textWithoutBrackets = hasBrackets ? currentLineText.replace(bracketPattern, '$2$4') : currentLineText;
+
+            let pattern = identifyPattern(textWithoutBrackets);
+
             if(new RegExp(reg, 'gm').exec(currentLineText)?.[5]?.trim() === '' && behindLineText.trim() === '') {
                 // 因为现在是第二次回车，但是除了标号以外的内容为空，所以需要删除这一行
                 const removePosStart = state.doc.lineAt(fromA).from; // 新行的开始位置
@@ -260,16 +305,17 @@ function checkForEnter(transaction: Transaction, state: EditorState) {
                 const tChanges = { from: removePosStart, to: removePosEnd, insert: '' };
 
                 changes.push(tChanges);
+                const currentLineNumber = state.doc.lineAt(fromA).number;
+                if(pattern) {
+                    const updatedChanges = updateLineNumbers(currentLineNumber + 2, state, 0, pattern, hasBrackets);
+                    changes.push(...updatedChanges);
+                    firstChanges.push(tChanges);
+                }
                 return;
             }
 
             // 检测行首的成对括号
-            let bracketPattern = new RegExp(reg, 'gm'); // 检测成对括号
-            const bracketMatch = bracketPattern.exec(currentLineText);
-            const hasBrackets = bracketMatch !== null && bracketMatch[3] != undefined;
-            const textWithoutBrackets = hasBrackets ? currentLineText.replace(bracketPattern, '$2$4') : currentLineText;
 
-            let pattern = identifyPattern(textWithoutBrackets);
             if(pattern === 'arabic' && !hasBrackets && new RegExp(/^\d+[\.]/).test(textWithoutBrackets)) return;
             if (pattern) {
                 const currentNumber = textWithoutBrackets.match(/^[\w\u4e00-\u9fa5]+/)?.[0]; // 提取序号部分
@@ -283,13 +329,18 @@ function checkForEnter(transaction: Transaction, state: EditorState) {
 
                     const insertPosition = state.doc.lineAt(toB).from; // 新行的开始位置
                     const tChanges = { from: insertPosition, to: insertPosition, insert: nextNumber + (punctuation === "、" ? "" : " ") };
-
-                    changes.push(tChanges);
+                    const currentLineNumber = state.doc.lineAt(fromA).number;
+                    const updatedChanges = updateLineNumbers(currentLineNumber + 2, state, parseInt(nextNumber), pattern, hasBrackets);
+                    changes.push(tChanges, ...updatedChanges);
+                    firstChanges.push(tChanges);
                 }
             }
         }
     });
-    return changes;
+    return {
+        changes,
+        firstChanges
+    };
 }
 
 export const enterPressPlugin = () => {
@@ -332,15 +383,18 @@ export const enterPressPlugin = () => {
 
                     update.transactions.forEach((tr) => {
                         if (tr.docChanged) {
-                            const forEnterChanges: ChangeSpec[] = checkForEnter(tr, update.view.state);
-                            if(forEnterChanges.length === 0) return;
+                            const forEnterChanges: {
+                                changes: ChangeSpec[],
+                                firstChanges: ChangeSpec[]
+                            } = checkForEnter(tr, update.view.state);
+                            if(forEnterChanges.changes.length === 0) return;
 
-                            if (forEnterChanges.length > 0) {
+                            if (forEnterChanges.changes.length > 0) {
                                 setTimeout(() => {
-                                    const newCursorPosition = calculateNewCursorPosition(forEnterChanges, update.view.state);
+                                    const newCursorPosition = calculateNewCursorPosition(forEnterChanges.firstChanges, update.view.state);
 
                                     const tr = update.view.state.update({
-                                        changes: ChangeSet.of(forEnterChanges, update.view.state.doc.length),
+                                        changes: ChangeSet.of(forEnterChanges.changes, update.view.state.doc.length),
                                         selection: EditorSelection.cursor(newCursorPosition)
                                     });
                                     update.view.dispatch(tr);
