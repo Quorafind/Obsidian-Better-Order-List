@@ -1,7 +1,7 @@
 {
 	"id": "better-order-list",
 	"name": "Better Order list",
-	"version": "1.0.1",
+	"version": "1.1.0",
 	"minAppVersion": "0.15.0",
 	"description": "Support new line order list like 1、 or (1)., etc.",
 	"author": "Boninall",
