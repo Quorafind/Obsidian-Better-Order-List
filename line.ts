@@ -159,6 +159,7 @@ function handleDelete(transaction: Transaction, state: EditorState) {
     transaction.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
         const deletedText = transaction.startState.doc.sliceString(fromA, toA);
         const currentLineText = state.doc.lineAt(fromA).text;
+        if(toB === state.doc.length) return; // 如果删除的是最后一行，不进行处理
         const nextLine = state.doc.lineAt(toB + 1);
 
         if (deletedText.includes('\n') || currentLineText.trim() === '') {
@@ -252,7 +253,6 @@ function checkForEnter(transaction: Transaction, state: EditorState) {
             if(currentLineText.trim() === '') return; // 如果当前行为空行，不进行处理
             const reg = /^([\(\[\【\（])?([^\）\]\】\)]*)([\）\]\】\)])?([\.、](.*))/;
 
-
             if(new RegExp(reg, 'gm').exec(currentLineText)?.[5]?.trim() === '' && behindLineText.trim() === '') {
                 // 因为现在是第二次回车，但是除了标号以外的内容为空，所以需要删除这一行
                 const removePosStart = state.doc.lineAt(fromA).from; // 新行的开始位置
@@ -270,7 +270,7 @@ function checkForEnter(transaction: Transaction, state: EditorState) {
             const textWithoutBrackets = hasBrackets ? currentLineText.replace(bracketPattern, '$2$4') : currentLineText;
 
             let pattern = identifyPattern(textWithoutBrackets);
-            if(pattern === 'arabic' && !hasBrackets) return;
+            if(pattern === 'arabic' && !hasBrackets && new RegExp(/^\d+[\.]/).test(textWithoutBrackets)) return;
             if (pattern) {
                 const currentNumber = textWithoutBrackets.match(/^[\w\u4e00-\u9fa5]+/)?.[0]; // 提取序号部分
                 const punctuation = textWithoutBrackets.match(/^[\w\u4e00-\u9fa5]+[\.\、]/)?.[0].slice(-1) || '.';

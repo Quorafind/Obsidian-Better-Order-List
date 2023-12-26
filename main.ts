@@ -4,7 +4,9 @@ import { enterPressPlugin } from "./line";
 export default class MyPlugin extends Plugin {
 
 	async onload() {
-		this.registerEditorExtension(enterPressPlugin());
+		this.app.workspace.onLayoutReady(()=>{
+			this.registerEditorExtension(enterPressPlugin());
+		})
 	}
 
 	onunload() {
