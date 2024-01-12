@@ -202,7 +202,6 @@ function handleDelete(transaction: Transaction, state: EditorState) {
 					if (linePatternType) {
 						const targetNumberText = currentNumber.toString();
 						const currentNumberText = extractNumber(textWithoutBrackets, linePatternType).toString();
-						console.log(textWithoutBrackets, currentNumberText, currentNumber);
 						const newNumberText = getNextNumber(targetNumberText, '', linePatternType);
 						if (newNumberText) {
 							const updatedText = `${bracketLeft}${newNumberText}${bracketRight}${textWithoutBrackets.slice(currentNumberText.length)}`;
@@ -312,8 +311,6 @@ function checkForEnter(transaction: Transaction, state: EditorState) {
 			const hasBrackets = bracketMatch !== null && bracketMatch[3] != undefined;
 			const textWithoutBrackets = hasBrackets ? currentLineText.replace(bracketPattern, '$2$4') : currentLineText;
 
-			console.log(textWithoutBrackets);
-
 			let pattern = identifyPattern(textWithoutBrackets);
 
 			if (pattern === null) return; // 如果没有识别出列表模式，不进行处理
@@ -386,7 +383,6 @@ export const enterPressPlugin = () => {
 
 				if (update.docChanged) {
 					if (update.transactions.some(tr => tr.annotation(Transaction.userEvent)?.contains("delete"))) {
-						console.log('delete', update.transactions);
 
 						update.transactions.forEach((tr) => {
 							if (tr.docChanged) {
