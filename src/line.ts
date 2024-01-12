@@ -1,5 +1,5 @@
 import { EditorView, keymap, ViewPlugin, ViewUpdate } from "@codemirror/view";
-import { ChangeSet, ChangeSpec, EditorSelection, EditorState, StateField, Transaction } from "@codemirror/state";
+import { ChangeSet, ChangeSpec, EditorSelection, EditorState, StateField, Text, Transaction } from "@codemirror/state";
 
 type PatternType = 'arabic' | 'uppercaseLetter' | 'lowercaseLetter' | 'romanNumeral' | 'chineseNumeral';
 
@@ -131,7 +131,11 @@ function calculateNewCursorPosition(forEnterChanges: ChangeSpec[], state: Editor
 	if (forEnterChanges.length === 0) return lastChangeEnd;
 	if (forEnterChanges.length === 1) {
 		if ('insert' in forEnterChanges[0] && (forEnterChanges[0].insert as string)?.trim() === '') {
-			return (forEnterChanges[0] as any).from || 0;
+			return (forEnterChanges[0] as {
+				from: number;
+				to?: number;
+				insert?: string | Text;
+			})?.from || 0;
 		}
 	}
 
